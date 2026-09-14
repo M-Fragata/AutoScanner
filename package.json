@@ -1,0 +1,25 @@
+{
+  "name": "autoscanner",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AutoScanner - Aplicação Full-Stack de Diagnóstico Automotivo Inteligente OBD-II",
+  "scripts": {
+    "server:dev": "npm --prefix server run dev",
+    "server:test": "npm --prefix server run test",
+    "server:typecheck": "npm --prefix server run typecheck",
+    "client:dev": "npm --prefix client run dev",
+    "client:build": "npm --prefix client run build",
+    "test": "npm --prefix server run test"
+  },
+  "keywords": [
+    "obd2",
+    "automotive-scanner",
+    "gemini-ai",
+    "express",
+    "react",
+    "typescript",
+    "tailwind"
+  ],
+  "author": "Matheus Fragata de Moraes",
+  "license": "MIT"
+}
