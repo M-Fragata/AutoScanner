@@ -51,27 +51,21 @@ interface AppStoreState {
 }
 
 const INITIAL_TELEMETRY: SensorTelemetry = {
-  rpm: 850,
-  coolantTempC: 88,
+  rpm: 0,
+  coolantTempC: 0,
   vehicleSpeedKmh: 0,
-  batteryVoltage: 13.8,
-  fuelPressureBar: 3.5,
-  intakeTempC: 32,
+  batteryVoltage: 0,
+  fuelPressureBar: 0,
+  intakeTempC: 0,
 };
 
 const MAX_HISTORY_POINTS = 50;
 
 export const useAppStore = create<AppStoreState>((set) => ({
   telemetry: INITIAL_TELEMETRY,
-  telemetryHistory: [
-    {
-      timestamp: Date.now(),
-      timeLabel: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-      ...INITIAL_TELEMETRY,
-    },
-  ],
+  telemetryHistory: [],
   viewMode: 'GAUGES',
-  isLiveStreaming: true,
+  isLiveStreaming: false,
   savedSessions: getSavedSessions(),
 
   updateTelemetry: (partialData) => {

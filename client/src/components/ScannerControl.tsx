@@ -66,18 +66,18 @@ export const ScannerControl: React.FC<ScannerControlProps> = ({
             className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-mono font-semibold border ${
               isHardwareConnected
                 ? 'bg-emerald-950/80 text-emerald-300 border-emerald-700/60'
-                : 'bg-slate-900 text-cyan-300 border-slate-750'
+                : 'bg-slate-900 text-slate-400 border-slate-800'
             }`}
           >
             {isHardwareConnected ? (
               <>
                 <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-                <span>ELM327 FÍSICO</span>
+                <span>ELM327 CONECTADO</span>
               </>
             ) : (
               <>
-                <Cpu className="w-3.5 h-3.5 text-cyan-400" />
-                <span>MODO SIMULAÇÃO</span>
+                <span className="w-2 h-2 rounded-full bg-slate-500" />
+                <span>DESCONECTADO</span>
               </>
             )}
           </div>
@@ -91,7 +91,7 @@ export const ScannerControl: React.FC<ScannerControlProps> = ({
               Interface / Chip:
             </span>
             <span className="font-mono text-slate-200 font-semibold truncate max-w-[200px]">
-              {isHardwareConnected ? hardwareVersion || 'ELM327 Bluetooth' : 'Simulador Virtual CAN'}
+              {isHardwareConnected ? hardwareVersion || 'ELM327 Conectado' : 'Desconectado'}
             </span>
           </div>
 
@@ -101,7 +101,7 @@ export const ScannerControl: React.FC<ScannerControlProps> = ({
               Protocolo OBD-II:
             </span>
             <span className="font-mono text-cyan-300 font-semibold truncate max-w-[200px]">
-              {protocolInfo || 'ISO 15765-4 CAN (500 kbps)'}
+              {isHardwareConnected ? protocolInfo || 'Identificando...' : 'Nenhum'}
             </span>
           </div>
 
@@ -111,7 +111,7 @@ export const ScannerControl: React.FC<ScannerControlProps> = ({
               Chassi / VIN:
             </span>
             <span className="font-mono text-slate-200 font-medium tracking-wider">
-              {vinInfo || (isHardwareConnected ? 'Lendo ECU...' : '9BWCA45U7FP001824')}
+              {isHardwareConnected ? vinInfo || 'Lendo ECU...' : 'Não detectado'}
             </span>
           </div>
         </div>
@@ -198,7 +198,7 @@ export const ScannerControl: React.FC<ScannerControlProps> = ({
               <>
                 <Zap className="w-3.5 h-3.5 text-cyan-400" />
                 <span>
-                  {isHardwareConnected ? 'Ler Falhas Reais da ECU' : 'Varredura Simulada'}
+                  {isHardwareConnected ? 'Ler Falhas da ECU' : 'Escanear Centralina'}
                 </span>
               </>
             )}

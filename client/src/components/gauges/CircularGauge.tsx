@@ -67,7 +67,7 @@ export const CircularGauge: React.FC<CircularGaugeProps> = ({
   let isDanger = false;
   let isWarning = false;
 
-  if (dangerThreshold !== undefined) {
+  if (dangerThreshold !== undefined && value > 0) {
     if (dangerThreshold > min) {
       isDanger = value >= dangerThreshold;
     } else {
@@ -75,7 +75,7 @@ export const CircularGauge: React.FC<CircularGaugeProps> = ({
     }
   }
 
-  if (warningThreshold !== undefined && !isDanger) {
+  if (warningThreshold !== undefined && !isDanger && value > 0) {
     if (warningThreshold > min) {
       isWarning = value >= warningThreshold;
     } else {

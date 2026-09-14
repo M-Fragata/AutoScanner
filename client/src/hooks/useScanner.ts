@@ -4,25 +4,22 @@ import type {
   FullDiagnosticResult,
   SensorTelemetry,
 } from '../types/scanner';
-import { simulateEcuScan, requestVehicleDiagnosis } from '../services/api';
+import { requestVehicleDiagnosis } from '../services/api';
 import { useAppStore } from '../store/useAppStore';
 
 const DEFAULT_VEHICLE: VehicleInfo = {
-  make: 'Volkswagen',
-  model: 'Golf GTI',
-  year: 2021,
-  mileageKm: 54000,
+  make: '',
+  model: '',
+  year: new Date().getFullYear(),
+  mileageKm: 0,
 };
 
 export function useScanner(currentTelemetry: SensorTelemetry) {
   const [vehicle, setVehicle] = useState<VehicleInfo>(DEFAULT_VEHICLE);
-  const [selectedCodes, setSelectedCodes] = useState<string[]>(['P0300', 'P0171']);
-  const [symptoms, setSymptoms] = useState<string>('Motor engasgando em subidas e luz de injeção acesa intermitente');
-  const [isScanningEcu, setIsScanningEcu] = useState<boolean>(false);
+  const [selectedCodes, setSelectedCodes] = useState<string[]>([]);
+  const [symptoms, setSymptoms] = useState<string>('');
   const [isAnalyzingAi, setIsAnalyzingAi] = useState<boolean>(false);
   const [diagnosticResult, setDiagnosticResult] = useState<FullDiagnosticResult | null>(null);
-  const [protocolInfo, setProtocolInfo] = useState<string | null>(null);
-  const [vinInfo, setVinInfo] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const addDtcCode = useCallback((code: string) => {
@@ -34,35 +31,6 @@ export function useScanner(currentTelemetry: SensorTelemetry) {
   const removeDtcCode = useCallback((code: string) => {
     setSelectedCodes((prev) => prev.filter((c) => c !== code));
   }, []);
-
-  // Simula conexão com o protocolo OBD-II do carro e varredura da central (ECU)
-  const triggerEcuScan = useCallback(
-    async (onScanComplete?: (telemetry: SensorTelemetry) => void) => {
-      setIsScanningEcu(true);
-      setErrorMessage(null);
-
-      try {
-        // Delay simulado de handshake do protocolo OBD-II (1.5s)
-        await new Promise((r) => setTimeout(r, 1200));
-
-        const scanData = await simulateEcuScan();
-        setProtocolInfo(scanData.protocol);
-        setVinInfo(scanData.vin);
-
-        const detected = scanData.detectedCodes.map((d) => d.code);
-        setSelectedCodes(detected);
-
-        if (onScanComplete) {
-          onScanComplete(scanData.telemetry);
-        }
-      } catch (err) {
-        setErrorMessage(err instanceof Error ? err.message : 'Erro ao escanear ECU');
-      } finally {
-        setIsScanningEcu(false);
-      }
-    },
-    []
-  );
 
   // Executa o diagnóstico completo acionando o backend e o Google Gemini AI
   const triggerAiDiagnosis = useCallback(async () => {
@@ -116,17 +84,13 @@ export function useScanner(currentTelemetry: SensorTelemetry) {
     setSelectedCodes,
     symptoms,
     setSymptoms,
-    isScanningEcu,
     isAnalyzingAi,
     diagnosticResult,
     setDiagnosticResult,
-    protocolInfo,
-    vinInfo,
     errorMessage,
     setErrorMessage,
     addDtcCode,
     removeDtcCode,
-    triggerEcuScan,
     triggerAiDiagnosis,
     resetDiagnosis,
   };

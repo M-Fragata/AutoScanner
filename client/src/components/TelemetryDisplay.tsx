@@ -25,15 +25,19 @@ import type { SensorTelemetry } from '../types/scanner';
 interface TelemetryDisplayProps {
   telemetry?: SensorTelemetry;
   isLiveStreaming?: boolean;
+  isHardwareConnected?: boolean;
   onToggleStreaming?: () => void;
   onOpenHud?: () => void;
   onOpenCustomPids?: () => void;
+  onOpenHardwareModal?: () => void;
 }
 
 export const TelemetryDisplay: React.FC<TelemetryDisplayProps> = ({
+  isHardwareConnected = false,
   onToggleStreaming,
   onOpenHud,
   onOpenCustomPids,
+  onOpenHardwareModal,
 }) => {
   const {
     telemetry,
@@ -103,11 +107,20 @@ export const TelemetryDisplay: React.FC<TelemetryDisplayProps> = ({
 
       {/* Barra de Ferramentas da Telemetria: Título, Modos de Exibição e Play/Pause */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center space-x-2">
-          <Radio className={`w-4 h-4 ${isLiveStreaming ? 'text-cyan-400 animate-pulse' : 'text-slate-500'}`} />
+        <div className="flex items-center space-x-2.5 flex-wrap">
+          <Radio className={`w-4 h-4 ${isHardwareConnected && isLiveStreaming ? 'text-cyan-400 animate-pulse' : 'text-slate-500'}`} />
           <h2 className="text-base font-bold text-slate-200 tracking-wide uppercase">
             Telemetria Automotiva em Tempo Real
           </h2>
+          <span
+            className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+              isHardwareConnected
+                ? 'bg-emerald-950/70 text-emerald-300 border-emerald-700'
+                : 'bg-slate-900 text-slate-400 border-slate-700'
+            }`}
+          >
+            {isHardwareConnected ? 'Hardware Ativo' : 'Aparelho Desconectado'}
+          </span>
         </div>
 
         <div className="flex items-center space-x-2">
@@ -218,6 +231,25 @@ export const TelemetryDisplay: React.FC<TelemetryDisplayProps> = ({
         </div>
       </div>
 
+      {/* Alerta quando o scanner físico estiver desconectado */}
+      {!isHardwareConnected && (
+        <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-2.5 text-xs text-slate-300">
+          <div className="flex items-center space-x-2">
+            <span className="w-2 h-2 rounded-full bg-slate-500 shrink-0" />
+            <span>Mostradores em espera. Conecte o scanner ELM327 Bluetooth/USB para iniciar o streaming de telemetria real.</span>
+          </div>
+          {onOpenHardwareModal && (
+            <button
+              type="button"
+              onClick={onOpenHardwareModal}
+              className="px-3 py-1 rounded-lg bg-cyan-950 hover:bg-cyan-900 text-cyan-300 border border-cyan-700/60 font-medium transition-colors cursor-pointer shrink-0 text-xs"
+            >
+              Conectar ELM327 →
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Renderização Condicional por Modo */}
       {viewMode === 'GAUGES' && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -232,7 +264,7 @@ export const TelemetryDisplay: React.FC<TelemetryDisplayProps> = ({
             warningThreshold={4500}
             dangerThreshold={5800}
             size={160}
-            subtitle="Tacômetro"
+            subtitle={isHardwareConnected ? 'Tacômetro' : 'Desconectado'}
           />
 
           {/* Manômetro Velocímetro (VSS) */}
@@ -244,7 +276,7 @@ export const TelemetryDisplay: React.FC<TelemetryDisplayProps> = ({
             unit="km/h"
             colorScheme="purple"
             size={160}
-            subtitle="Sensor VSS"
+            subtitle={isHardwareConnected ? 'Sensor VSS' : 'Desconectado'}
           />
 
           {/* Manômetro Temperatura Líquido Arrefecimento (ECT) */}
@@ -258,7 +290,13 @@ export const TelemetryDisplay: React.FC<TelemetryDisplayProps> = ({
             warningThreshold={100}
             dangerThreshold={108}
             size={160}
-            subtitle={telemetry.coolantTempC > 105 ? 'Superaquecendo' : 'Faixa ideal: 85-98°C'}
+            subtitle={
+              !isHardwareConnected || telemetry.coolantTempC === 0
+                ? 'Sensor ECT'
+                : telemetry.coolantTempC > 105
+                ? 'Superaquecendo'
+                : 'Faixa ideal: 85-98°C'
+            }
           />
 
           {/* Manômetro Tensão Bateria / Alternador */}
@@ -273,7 +311,13 @@ export const TelemetryDisplay: React.FC<TelemetryDisplayProps> = ({
             warningThreshold={12.0}
             dangerThreshold={11.5}
             size={160}
-            subtitle={telemetry.batteryVoltage >= 13.5 ? 'Alternador Ativo' : 'Carga Baixa'}
+            subtitle={
+              !isHardwareConnected || telemetry.batteryVoltage === 0
+                ? 'Sensor ATRV'
+                : telemetry.batteryVoltage >= 13.5
+                ? 'Alternador Ativo'
+                : 'Carga Baixa'
+            }
           />
 
           {/* Manômetro Pressão de Linha de Combustível */}
@@ -286,7 +330,7 @@ export const TelemetryDisplay: React.FC<TelemetryDisplayProps> = ({
             unit="bar"
             colorScheme="emerald"
             size={160}
-            subtitle="Linha Regulada"
+            subtitle={!isHardwareConnected || telemetry.fuelPressureBar === 0 ? 'Sensor FRP' : 'Linha Regulada'}
           />
 
           {/* Manômetro Temperatura Ar de Admissão (IAT) */}
@@ -300,7 +344,7 @@ export const TelemetryDisplay: React.FC<TelemetryDisplayProps> = ({
             warningThreshold={55}
             dangerThreshold={65}
             size={160}
-            subtitle="Sensor IAT"
+            subtitle={isHardwareConnected ? 'Sensor IAT' : 'Desconectado'}
           />
         </div>
       )}

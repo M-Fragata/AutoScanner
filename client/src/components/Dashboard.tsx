@@ -49,7 +49,7 @@ export const Dashboard: React.FC = () => {
   const [isLoadingPredictive, setIsLoadingPredictive] = useState<boolean>(false);
   const [successToast, setSuccessToast] = useState<string | null>(null);
 
-  const { savedSessions, telemetryHistory } = useAppStore();
+  const { savedSessions, telemetryHistory, setIsLiveStreaming } = useAppStore();
 
   // Hook de controle de telemetria automotiva (simulação e estado dos mostradores)
   const {
@@ -93,17 +93,13 @@ export const Dashboard: React.FC = () => {
     setSelectedCodes,
     symptoms,
     setSymptoms,
-    isScanningEcu,
     isAnalyzingAi,
     diagnosticResult,
     setDiagnosticResult,
-    protocolInfo,
-    vinInfo,
     errorMessage,
     setErrorMessage,
     addDtcCode,
     removeDtcCode,
-    triggerEcuScan,
     triggerAiDiagnosis,
     resetDiagnosis,
   } = useScanner(telemetry);
@@ -154,12 +150,22 @@ export const Dashboard: React.FC = () => {
     }
   }, [successToast]);
 
-  // Se conectar ao hardware real, desativa oscilação simulada de sensores
+  // Ativa streaming ao vivo quando o scanner físico estiver conectado e zera quando desconectado
   useEffect(() => {
-    if (isHardwareConnected && isLiveStreaming) {
-      toggleLiveStreaming();
+    if (isHardwareConnected) {
+      setIsLiveStreaming(true);
+    } else {
+      setIsLiveStreaming(false);
+      setTelemetry({
+        rpm: 0,
+        coolantTempC: 0,
+        vehicleSpeedKmh: 0,
+        batteryVoltage: 0,
+        fuelPressureBar: 0,
+        intakeTempC: 0,
+      });
     }
-  }, [isHardwareConnected, isLiveStreaming, toggleLiveStreaming]);
+  }, [isHardwareConnected, setIsLiveStreaming, setTelemetry]);
 
   // Avaliação em tempo real dos limites de segurança de telemetria (Sprint 3: Alarmes)
   // Derivado durante render para evitar setState síncrono dentro de effect
@@ -173,7 +179,7 @@ export const Dashboard: React.FC = () => {
     customPidService.simulateLiveValues();
   }, [telemetry]);
 
-  // Executa varredura: se scanner físico estiver conectado, lê ECU real; senão, simula
+  // Executa varredura: se scanner físico estiver conectado, lê ECU real; senão, avisa erro
   const handleEcuScan = async () => {
     if (isHardwareConnected) {
       setErrorMessage(null);
@@ -185,9 +191,8 @@ export const Dashboard: React.FC = () => {
         setSuccessToast('Varredura concluída: Nenhum código de falha ativo retornado pela ECU.');
       }
     } else {
-      triggerEcuScan((newTelemetry) => {
-        setTelemetry(newTelemetry);
-      });
+      setErrorMessage('Nenhum scanner ELM327 conectado. Conecte o aparelho via Bluetooth ou USB para realizar a leitura da centralina.');
+      setIsHardwareModalOpen(true);
     }
   };
 
@@ -201,32 +206,22 @@ export const Dashboard: React.FC = () => {
         setSuccessToast('Comando Modo 04 executado: Memória da ECU limpa e luz de injeção apagada.');
       }
     } else {
-      // Simulado: limpa códigos da tela
-      selectedCodes.forEach((c) => removeDtcCode(c));
+      setErrorMessage('Nenhum scanner ELM327 conectado. Conecte o aparelho via Bluetooth ou USB para apagar os códigos da ECU.');
       setIsClearModalOpen(false);
-      setSuccessToast('Códigos de falha limpos com sucesso.');
     }
   };
 
   // Consulta de Freeze Frame (Modo 02 da ECU)
   const handleFetchFreezeFrame = async () => {
     setIsLoadingSprint2(true);
+    setErrorMessage(null);
     try {
       if (isHardwareConnected) {
         const data = await elm327Service.readFreezeFrame();
         setFreezeFrameData(data);
       } else {
-        const simulated: FreezeFrameData = {
-          triggerDtc: selectedCodes[0] || 'P0300',
-          rpm: 2480,
-          coolantTempC: 98,
-          vehicleSpeedKmh: 74,
-          engineLoadPercent: 68,
-          fuelPressureBar: 3.6,
-          intakeTempC: 38,
-          timestamp: new Date().toISOString(),
-        };
-        setFreezeFrameData(simulated);
+        setFreezeFrameData(null);
+        setErrorMessage('Conecte o scanner ELM327 ao veículo para consultar o quadro de Freeze Frame (Modo 02).');
       }
     } catch {
       setErrorMessage('Falha ao consultar quadro de Freeze Frame.');
@@ -243,32 +238,14 @@ export const Dashboard: React.FC = () => {
   // Consulta de Prontidão de Emissões (I/M Readiness - Modo 01 PID 01)
   const handleFetchEmissions = async () => {
     setIsLoadingSprint2(true);
+    setErrorMessage(null);
     try {
       if (isHardwareConnected) {
         const data = await elm327Service.readEmissionsReadiness();
         setEmissionsReport(data);
       } else {
-        const hasCodes = selectedCodes.length > 0;
-        const report: EmissionsReadinessReport = {
-          milStatus: hasCodes,
-          dtcCount: selectedCodes.length,
-          verdict: hasCodes ? 'REPROVADO_LUZ_MIL' : 'APROVADO',
-          summary: hasCodes
-            ? `Luz de injeção acesa com ${selectedCodes.length} código(s) detectado(s). Veículo reprovado na inspeção veicular.`
-            : 'Todos os autotestes OBD-II foram concluídos com êxito. Veículo 100% apto na vistoria de emissões.',
-          checkedAt: new Date().toISOString(),
-          monitors: [
-            { id: 'misfire', name: 'Falha de Combustão (Misfire)', supported: true, ready: true, description: 'Monitoramento contínuo de queima e cilindros.' },
-            { id: 'fuel_system', name: 'Sistema de Combustível', supported: true, ready: true, description: 'Dosagem estequiométrica em malha fechada.' },
-            { id: 'components', name: 'Componentes Abrangentes', supported: true, ready: true, description: 'Sensores de entrada e atuadores da ECU.' },
-            { id: 'catalyst', name: 'Catalisador (CAT)', supported: true, ready: !hasCodes, description: 'Eficiência de conversão catalítica dos gases.' },
-            { id: 'evap', name: 'Sistema Evaporativo (EVAP)', supported: true, ready: true, description: 'Purga e contenção de vapores do tanque.' },
-            { id: 'secondary_air', name: 'Ar Secundário (AIR)', supported: false, ready: false, description: 'Injeção de ar pós-combustão.' },
-            { id: 'o2_sensor', name: 'Sensor de O2 (Sonda Lambda)', supported: true, ready: true, description: 'Tempo de resposta da sonda lambda.' },
-            { id: 'egr_vvt', name: 'Válvula EGR / VVT', supported: true, ready: true, description: 'Recirculação de gases e comando variável.' },
-          ],
-        };
-        setEmissionsReport(report);
+        setEmissionsReport(null);
+        setErrorMessage('Conecte o scanner ELM327 ao veículo para consultar a prontidão de emissões (I/M Readiness Modo 01).');
       }
     } catch {
       setErrorMessage('Falha ao consultar prontidão de emissões.');
@@ -405,9 +382,11 @@ export const Dashboard: React.FC = () => {
         <TelemetryDisplay
           telemetry={telemetry}
           isLiveStreaming={isLiveStreaming}
+          isHardwareConnected={isHardwareConnected}
           onToggleStreaming={toggleLiveStreaming}
           onOpenHud={() => setIsHudOpen(true)}
           onOpenCustomPids={() => setIsCustomPidsOpen(true)}
+          onOpenHardwareModal={() => setIsHardwareModalOpen(true)}
         />
 
         {/* Grid de Configuração: Ficha do Carro & Interface do Scanner OBD */}
@@ -420,12 +399,12 @@ export const Dashboard: React.FC = () => {
           />
 
           <ScannerControl
-            isScanningEcu={isScanningEcu || isScanningHardwareDtc}
+            isScanningEcu={isScanningHardwareDtc}
             isAnalyzingAi={isAnalyzingAi}
             isHardwareConnected={isHardwareConnected}
             hardwareVersion={deviceInfo.version}
-            protocolInfo={isHardwareConnected ? deviceInfo.protocol : protocolInfo}
-            vinInfo={isHardwareConnected && deviceInfo.vin ? deviceInfo.vin : vinInfo}
+            protocolInfo={isHardwareConnected ? deviceInfo.protocol : null}
+            vinInfo={isHardwareConnected && deviceInfo.vin ? deviceInfo.vin : null}
             selectedCodesCount={selectedCodes.length}
             onScanEcu={handleEcuScan}
             onDiagnoseAi={triggerAiDiagnosis}

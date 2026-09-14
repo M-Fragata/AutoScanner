@@ -15,7 +15,6 @@ export const DEFAULT_CUSTOM_PID_PRESETS: CustomPidDefinition[] = [
     description: 'Temperatura do óleo lubrificante no cárter (motores VW EA888 TSI e EA211).',
     manufacturer: 'Volkswagen / Audi',
     enabled: true,
-    lastValue: 92,
   },
   {
     id: 'vw_boost_pressure',
@@ -29,7 +28,6 @@ export const DEFAULT_CUSTOM_PID_PRESETS: CustomPidDefinition[] = [
     description: 'Pressão de sobrealimentação da turbina relativa à pressão atmosférica.',
     manufacturer: 'Volkswagen / Audi',
     enabled: true,
-    lastValue: 0.85,
   },
   {
     id: 'gm_trans_temp',
@@ -43,7 +41,6 @@ export const DEFAULT_CUSTOM_PID_PRESETS: CustomPidDefinition[] = [
     description: 'Temperatura do fluido hidráulico da transmissão automática (GM 6T30/6T40).',
     manufacturer: 'Chevrolet / GM',
     enabled: false,
-    lastValue: 78,
   },
   {
     id: 'ford_hpfp_pressure',
@@ -57,7 +54,6 @@ export const DEFAULT_CUSTOM_PID_PRESETS: CustomPidDefinition[] = [
     description: 'Pressão da bomba de injeção direta de combustível (Ford EcoBoost).',
     manufacturer: 'Ford',
     enabled: false,
-    lastValue: 140,
   },
   {
     id: 'univ_fuel_level',
@@ -71,7 +67,6 @@ export const DEFAULT_CUSTOM_PID_PRESETS: CustomPidDefinition[] = [
     description: 'Percentual volumétrico de combustível restante no tanque.',
     manufacturer: 'Universal',
     enabled: true,
-    lastValue: 65,
   },
   {
     id: 'univ_ecu_voltage',
@@ -85,7 +80,6 @@ export const DEFAULT_CUSTOM_PID_PRESETS: CustomPidDefinition[] = [
     description: 'Tensão medida diretamente pelos conversores AD internos da centralina.',
     manufacturer: 'Universal',
     enabled: true,
-    lastValue: 14.15,
   },
 ];
 
@@ -326,7 +320,8 @@ class CustomPidManagerService {
       if (stored) {
         const parsed = JSON.parse(stored) as CustomPidDefinition[];
         if (Array.isArray(parsed) && parsed.length > 0) {
-          this.pids = parsed;
+          // Garante que valores fakes de sessões anteriores não fiquem congelados ao iniciar
+          this.pids = parsed.map((p) => ({ ...p, lastValue: undefined, lastUpdated: undefined }));
           return this.pids;
         }
       }
@@ -334,7 +329,7 @@ class CustomPidManagerService {
       // Fallback
     }
 
-    this.pids = [...DEFAULT_CUSTOM_PID_PRESETS];
+    this.pids = DEFAULT_CUSTOM_PID_PRESETS.map((p) => ({ ...p, lastValue: undefined }));
     this.savePids(this.pids);
     return this.pids;
   }
@@ -343,6 +338,7 @@ class CustomPidManagerService {
     const newPid: CustomPidDefinition = {
       ...pid,
       id: `pid_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      lastValue: undefined,
     };
 
     this.pids.push(newPid);
@@ -356,6 +352,14 @@ class CustomPidManagerService {
 
     this.pids[idx] = { ...this.pids[idx], ...updates };
     this.savePids(this.pids);
+    return true;
+  }
+
+  public updatePidValue(id: string, val: number): boolean {
+    const pid = this.pids.find((p) => p.id === id);
+    if (!pid) return false;
+    pid.lastValue = val;
+    pid.lastUpdated = Date.now();
     return true;
   }
 
@@ -387,30 +391,16 @@ class CustomPidManagerService {
   }
 
   public resetToDefaults(): CustomPidDefinition[] {
-    this.pids = [...DEFAULT_CUSTOM_PID_PRESETS];
+    this.pids = DEFAULT_CUSTOM_PID_PRESETS.map((p) => ({ ...p, lastValue: undefined }));
     this.savePids(this.pids);
     return this.pids;
   }
 
   /**
-   * Simula a variação suave de valores para os PIDs customizados ativos
+   * Em modo de produção, os valores dos PIDs vêm exclusivamente do hardware real.
    */
   public simulateLiveValues(): void {
-    const now = Date.now();
-    this.pids.forEach((p) => {
-      if (!p.enabled) return;
-
-      const current = p.lastValue ?? (p.minVal + p.maxVal) / 2;
-      const step = (p.maxVal - p.minVal) * 0.02;
-      const delta = (Math.random() - 0.5) * step;
-      let next = current + delta;
-
-      if (next > p.maxVal) next = p.maxVal;
-      if (next < p.minVal) next = p.minVal;
-
-      p.lastValue = Number(next.toFixed(2));
-      p.lastUpdated = now;
-    });
+    // Não altera valores quando desconectado - mantém undefined até leitura real
   }
 }
 

@@ -63,6 +63,11 @@ class AlarmManagerService {
   public evaluateTelemetry(telemetry: SensorTelemetry): ActiveAlarmViolation[] {
     const violations: ActiveAlarmViolation[] = [];
 
+    // Se o aparelho estiver desconectado / sensores zerados, não dispara alarmes
+    if (telemetry.rpm === 0 && telemetry.coolantTempC === 0 && telemetry.batteryVoltage === 0) {
+      return [];
+    }
+
     // 1. Temperatura do arrefecimento
     if (telemetry.coolantTempC >= this.config.coolantDangerThreshold) {
       violations.push({
@@ -82,8 +87,8 @@ class AlarmManagerService {
       });
     }
 
-    // 2. Tensão da bateria / alternador
-    if (telemetry.batteryVoltage <= this.config.batteryLowThreshold) {
+    // 2. Tensão da bateria / alternador (apenas se houver leitura ativa > 0V)
+    if (telemetry.batteryVoltage > 0 && telemetry.batteryVoltage <= this.config.batteryLowThreshold) {
       violations.push({
         id: 'battery_low',
         message: `Subtensão Elétrica (${telemetry.batteryVoltage}V <= ${this.config.batteryLowThreshold}V). Alternador inoperante ou bateria descarregada.`,
