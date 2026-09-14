@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Header } from './Header';
 import { TelemetryDisplay } from './TelemetryDisplay';
 import { VehicleForm } from './VehicleForm';
@@ -45,7 +45,6 @@ export const Dashboard: React.FC = () => {
   const [freezeFrameData, setFreezeFrameData] = useState<FreezeFrameData | null>(null);
   const [emissionsReport, setEmissionsReport] = useState<EmissionsReadinessReport | null>(null);
   const [predictiveReport, setPredictiveReport] = useState<PredictiveReport | null>(null);
-  const [activeViolations, setActiveViolations] = useState<ActiveAlarmViolation[]>([]);
   const [isLoadingSprint2, setIsLoadingSprint2] = useState<boolean>(false);
   const [isLoadingPredictive, setIsLoadingPredictive] = useState<boolean>(false);
   const [successToast, setSuccessToast] = useState<string | null>(null);
@@ -163,10 +162,14 @@ export const Dashboard: React.FC = () => {
   }, [isHardwareConnected, isLiveStreaming, toggleLiveStreaming]);
 
   // Avaliação em tempo real dos limites de segurança de telemetria (Sprint 3: Alarmes)
-  // e simulação/atualização de valores dos PIDs customizados ativos (Sprint 4: PIDs)
+  // Derivado durante render para evitar setState síncrono dentro de effect
+  const activeViolations: ActiveAlarmViolation[] = useMemo(
+    () => alarmManager.evaluateTelemetry(telemetry),
+    [telemetry]
+  );
+
+  // Simulação/atualização de valores dos PIDs customizados ativos (Sprint 4: PIDs)
   useEffect(() => {
-    const violations = alarmManager.evaluateTelemetry(telemetry);
-    setActiveViolations(violations);
     customPidService.simulateLiveValues();
   }, [telemetry]);
 
@@ -225,7 +228,7 @@ export const Dashboard: React.FC = () => {
         };
         setFreezeFrameData(simulated);
       }
-    } catch (err) {
+    } catch {
       setErrorMessage('Falha ao consultar quadro de Freeze Frame.');
     } finally {
       setIsLoadingSprint2(false);
@@ -267,7 +270,7 @@ export const Dashboard: React.FC = () => {
         };
         setEmissionsReport(report);
       }
-    } catch (err) {
+    } catch {
       setErrorMessage('Falha ao consultar prontidão de emissões.');
     } finally {
       setIsLoadingSprint2(false);

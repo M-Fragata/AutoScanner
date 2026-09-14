@@ -2,7 +2,7 @@
  * Funções puras para decodificação de respostas do protocolo OBD-II / ELM327.
  * Suporta Modos 01, 02 (Freeze Frame), 03, 04, 07 e 09.
  */
-import type { EmissionsReadinessReport, ReadinessMonitor } from '../../types/scanner';
+import type { EmissionsReadinessReport, ReadinessMonitor } from '../../types/scanner.ts';
 
 // Limpa caracteres especiais, prompt '>' e quebras de linha
 export function cleanResponse(raw: string): string {

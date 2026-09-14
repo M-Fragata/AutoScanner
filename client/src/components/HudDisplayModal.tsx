@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   X,
   Maximize2,
@@ -33,6 +33,20 @@ export const HudDisplayModal: React.FC<HudDisplayModalProps> = ({
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [theme, setTheme] = useState<HudColorTheme>('green');
 
+  const toggleFullscreen = useCallback(async () => {
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+        setIsFullscreen(true);
+      } else {
+        await document.exitFullscreen();
+        setIsFullscreen(false);
+      }
+    } catch {
+      // Ignora restrições do navegador
+    }
+  }, []);
+
   // Suporte a tecla Escape e atalhos
   useEffect(() => {
     if (!isOpen) return;
@@ -47,13 +61,13 @@ export const HudDisplayModal: React.FC<HudDisplayModalProps> = ({
       } else if (e.key.toLowerCase() === 'm') {
         setIsMirrored((prev) => !prev);
       } else if (e.key.toLowerCase() === 'f') {
-        toggleFullscreen();
+        void toggleFullscreen();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, toggleFullscreen]);
 
   // Listener de alteração do modo tela cheia pelo navegador
   useEffect(() => {
@@ -66,20 +80,6 @@ export const HudDisplayModal: React.FC<HudDisplayModalProps> = ({
   }, []);
 
   if (!isOpen) return null;
-
-  const toggleFullscreen = async () => {
-    try {
-      if (!document.fullscreenElement) {
-        await document.documentElement.requestFullscreen();
-        setIsFullscreen(true);
-      } else {
-        await document.exitFullscreen();
-        setIsFullscreen(false);
-      }
-    } catch {
-      // Ignora restrições do navegador
-    }
-  };
 
   // Cores dinâmicas segundo o tema selecionado
   const getThemeClasses = () => {
