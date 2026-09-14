@@ -1,6 +1,106 @@
+import { z } from 'zod';
 import { getGeminiClient } from '../utils/geminiClient.ts';
 import { OBD_DTC_DATABASE } from '../utils/sampleCodes.ts';
 import type { DtcDefinition } from '../utils/sampleCodes.ts';
+
+export const ProbableCauseSchema = z.object({
+  cause: z.string(),
+  probability: z.number().min(0).max(100),
+  description: z.string(),
+});
+
+export const DiagnosticActionSchema = z.object({
+  stepNumber: z.number(),
+  title: z.string(),
+  action: z.string(),
+  requiredTools: z.array(z.string()),
+});
+
+export const CostEstimateSchema = z.object({
+  currency: z.string().default('BRL'),
+  minCost: z.number(),
+  maxCost: z.number(),
+  partsDescription: z.string(),
+});
+
+export const AiDiagnosticReportPayloadSchema = z.object({
+  summary: z.string(),
+  severity: z.enum(['BAIXA', 'MÉDIA', 'ALTA', 'CRÍTICA']),
+  safetyAssessment: z.object({
+    isSafeToDrive: z.boolean(),
+    safetyNote: z.string(),
+  }),
+  probableCauses: z.array(ProbableCauseSchema),
+  recommendedActions: z.array(DiagnosticActionSchema),
+  costEstimate: CostEstimateSchema,
+  affectedSystems: z.array(z.string()),
+});
+
+export type AiDiagnosticReportPayload = z.infer<typeof AiDiagnosticReportPayloadSchema>;
+
+export const DIAGNOSTIC_RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    summary: { type: 'string' },
+    severity: { type: 'string', enum: ['BAIXA', 'MÉDIA', 'ALTA', 'CRÍTICA'] },
+    safetyAssessment: {
+      type: 'object',
+      properties: {
+        isSafeToDrive: { type: 'boolean' },
+        safetyNote: { type: 'string' },
+      },
+      required: ['isSafeToDrive', 'safetyNote'],
+    },
+    probableCauses: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          cause: { type: 'string' },
+          probability: { type: 'number' },
+          description: { type: 'string' },
+        },
+        required: ['cause', 'probability', 'description'],
+      },
+    },
+    recommendedActions: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          stepNumber: { type: 'integer' },
+          title: { type: 'string' },
+          action: { type: 'string' },
+          requiredTools: { type: 'array', items: { type: 'string' } },
+        },
+        required: ['stepNumber', 'title', 'action', 'requiredTools'],
+      },
+    },
+    costEstimate: {
+      type: 'object',
+      properties: {
+        currency: { type: 'string' },
+        minCost: { type: 'number' },
+        maxCost: { type: 'number' },
+        partsDescription: { type: 'string' },
+      },
+      required: ['currency', 'minCost', 'maxCost', 'partsDescription'],
+    },
+    affectedSystems: {
+      type: 'array',
+      items: { type: 'string' },
+    },
+  },
+  required: [
+    'summary',
+    'severity',
+    'safetyAssessment',
+    'probableCauses',
+    'recommendedActions',
+    'costEstimate',
+    'affectedSystems',
+  ],
+};
 
 export interface VehicleInfo {
   make: string;
@@ -25,37 +125,11 @@ export interface DiagnosticInput {
   telemetry?: SensorTelemetry;
 }
 
-export interface ProbableCause {
-  cause: string;
-  probability: number;
-  description: string;
-}
+export type ProbableCause = z.infer<typeof ProbableCauseSchema>;
+export type DiagnosticAction = z.infer<typeof DiagnosticActionSchema>;
+export type CostEstimate = z.infer<typeof CostEstimateSchema>;
 
-export interface DiagnosticAction {
-  stepNumber: number;
-  title: string;
-  action: string;
-  requiredTools: string[];
-}
-
-export interface CostEstimate {
-  currency: string;
-  minCost: number;
-  maxCost: number;
-  partsDescription: string;
-}
-
-export interface AiDiagnosticReport {
-  summary: string;
-  severity: 'BAIXA' | 'MÉDIA' | 'ALTA' | 'CRÍTICA';
-  safetyAssessment: {
-    isSafeToDrive: boolean;
-    safetyNote: string;
-  };
-  probableCauses: ProbableCause[];
-  recommendedActions: DiagnosticAction[];
-  costEstimate: CostEstimate;
-  affectedSystems: string[];
+export interface AiDiagnosticReport extends AiDiagnosticReportPayload {
   aiSource: 'google-gemini' | 'rule-engine-fallback';
   analyzedAt: string;
 }
@@ -89,6 +163,7 @@ export class GeminiService {
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
+        responseSchema: DIAGNOSTIC_RESPONSE_SCHEMA,
         temperature: 0.2,
       },
     });
@@ -98,32 +173,16 @@ export class GeminiService {
       return null;
     }
 
-    const parsed = JSON.parse(text) as {
-      summary?: string;
-      severity?: 'BAIXA' | 'MÉDIA' | 'ALTA' | 'CRÍTICA';
-      safetyAssessment?: { isSafeToDrive: boolean; safetyNote: string };
-      probableCauses?: ProbableCause[];
-      recommendedActions?: DiagnosticAction[];
-      costEstimate?: CostEstimate;
-      affectedSystems?: string[];
-    };
+    const rawParsed = JSON.parse(text);
+    const validated = AiDiagnosticReportPayloadSchema.safeParse(rawParsed);
+
+    if (!validated.success) {
+      console.warn('⚠️ Resposta do Gemini não atendeu ao schema Zod esperado:', validated.error.format());
+      return null;
+    }
 
     return {
-      summary: parsed.summary || 'Diagnóstico preliminar gerado por IA.',
-      severity: parsed.severity || 'MÉDIA',
-      safetyAssessment: parsed.safetyAssessment || {
-        isSafeToDrive: false,
-        safetyNote: 'Recomenda-se conduzir o veículo cautelosamente até a oficina mais próxima.',
-      },
-      probableCauses: parsed.probableCauses || [],
-      recommendedActions: parsed.recommendedActions || [],
-      costEstimate: parsed.costEstimate || {
-        currency: 'BRL',
-        minCost: 150,
-        maxCost: 800,
-        partsDescription: 'Verificação em oficina especializada.',
-      },
-      affectedSystems: parsed.affectedSystems || ['Injeção Eletrônica', 'Motor'],
+      ...validated.data,
       aiSource: 'google-gemini',
       analyzedAt: new Date().toISOString(),
     };
@@ -340,6 +399,7 @@ Retorne ESTRITAMENTE um JSON com o seguinte schema:
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
+        responseSchema: PREDICTIVE_RESPONSE_SCHEMA,
         temperature: 0.2,
       },
     });
@@ -347,21 +407,16 @@ Retorne ESTRITAMENTE um JSON com o seguinte schema:
     const text = response.text;
     if (!text) return null;
 
-    const parsed = JSON.parse(text) as Partial<PredictiveReport>;
+    const rawParsed = JSON.parse(text);
+    const validated = PredictiveReportPayloadSchema.safeParse(rawParsed);
+
+    if (!validated.success) {
+      console.warn('⚠️ Resposta de predição do Gemini não atendeu ao schema Zod:', validated.error.format());
+      return null;
+    }
 
     return {
-      summary: parsed.summary || 'Análise preditiva preliminar baseada em série temporal.',
-      wearRiskLevel: parsed.wearRiskLevel || 'MODERADO',
-      confidenceScore: parsed.confidenceScore || 80,
-      trends: parsed.trends || [],
-      predictedFailure: parsed.predictedFailure || {
-        component: 'Sistema de Arrefecimento / Injeção',
-        description: 'Variações nos parâmetros operacionais indicam desgaste preliminar.',
-        estimatedTimeToFailure: '1000 - 3000 km',
-      },
-      preventiveRecommendations: parsed.preventiveRecommendations || [
-        'Checagem periódica do nível de fluido de arrefecimento e tensão da bateria.',
-      ],
+      ...validated.data,
       analyzedSamplesCount: input.telemetryHistory.length,
       analyzedAt: new Date().toISOString(),
       aiSource: 'google-gemini',
@@ -490,23 +545,77 @@ export interface PredictiveInput {
   symptoms?: string;
 }
 
-export interface PredictiveTrend {
-  parameter: string;
-  trend: 'ESTÁVEL' | 'ELEVAÇÃO' | 'QUEDA' | 'FLUTUAÇÃO_ANORMAL';
-  significance: string;
-}
+export const PredictiveTrendSchema = z.object({
+  parameter: z.string(),
+  trend: z.enum(['ESTÁVEL', 'ELEVAÇÃO', 'QUEDA', 'FLUTUAÇÃO_ANORMAL']),
+  significance: z.string(),
+});
 
-export interface PredictiveReport {
-  summary: string;
-  wearRiskLevel: 'BAIXO' | 'MODERADO' | 'ELEVADO' | 'CRÍTICO';
-  confidenceScore: number;
-  trends: PredictiveTrend[];
-  predictedFailure: {
-    component: string;
-    description: string;
-    estimatedTimeToFailure: string;
-  };
-  preventiveRecommendations: string[];
+export const PredictiveReportPayloadSchema = z.object({
+  summary: z.string(),
+  wearRiskLevel: z.enum(['BAIXA', 'BAIXO', 'MÉDIA', 'MODERADO', 'ALTA', 'ELEVADO', 'CRÍTICA', 'CRÍTICO']).transform((val) => {
+    if (val === 'BAIXA') return 'BAIXO';
+    if (val === 'MÉDIA') return 'MODERADO';
+    if (val === 'ALTA') return 'ELEVADO';
+    if (val === 'CRÍTICA') return 'CRÍTICO';
+    return val as 'BAIXO' | 'MODERADO' | 'ELEVADO' | 'CRÍTICO';
+  }),
+  confidenceScore: z.number(),
+  trends: z.array(PredictiveTrendSchema),
+  predictedFailure: z.object({
+    component: z.string(),
+    description: z.string(),
+    estimatedTimeToFailure: z.string(),
+  }),
+  preventiveRecommendations: z.array(z.string()),
+});
+
+export type PredictiveTrend = z.infer<typeof PredictiveTrendSchema>;
+export type PredictiveReportPayload = z.infer<typeof PredictiveReportPayloadSchema>;
+
+export const PREDICTIVE_RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    summary: { type: 'string' },
+    wearRiskLevel: { type: 'string', enum: ['BAIXO', 'MODERADO', 'ELEVADO', 'CRÍTICO'] },
+    confidenceScore: { type: 'number' },
+    trends: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          parameter: { type: 'string' },
+          trend: { type: 'string', enum: ['ESTÁVEL', 'ELEVAÇÃO', 'QUEDA', 'FLUTUAÇÃO_ANORMAL'] },
+          significance: { type: 'string' },
+        },
+        required: ['parameter', 'trend', 'significance'],
+      },
+    },
+    predictedFailure: {
+      type: 'object',
+      properties: {
+        component: { type: 'string' },
+        description: { type: 'string' },
+        estimatedTimeToFailure: { type: 'string' },
+      },
+      required: ['component', 'description', 'estimatedTimeToFailure'],
+    },
+    preventiveRecommendations: {
+      type: 'array',
+      items: { type: 'string' },
+    },
+  },
+  required: [
+    'summary',
+    'wearRiskLevel',
+    'confidenceScore',
+    'trends',
+    'predictedFailure',
+    'preventiveRecommendations',
+  ],
+};
+
+export interface PredictiveReport extends PredictiveReportPayload {
   analyzedSamplesCount: number;
   analyzedAt: string;
   aiSource: 'google-gemini' | 'rule-engine-fallback';
