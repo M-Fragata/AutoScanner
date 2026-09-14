@@ -259,7 +259,7 @@ export const CircularGauge: React.FC<CircularGaugeProps> = ({
           >
             {value.toFixed(decimals)}
           </span>
-          <span className="text-[10px] uppercase font-semibold text-slate-400 tracking-wider">
+          <span className="text-[10px] uppercase font-semibold text-white tracking-wider">
             {unit}
           </span>
         </div>
